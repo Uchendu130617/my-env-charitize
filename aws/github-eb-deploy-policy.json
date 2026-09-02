@@ -1,0 +1,48 @@
+﻿{
+    "Version":  "2012-10-17",
+    "Statement":  [
+                      {
+                          "Effect":  "Allow",
+                          "Sid":  "ElasticBeanstalkDeployment",
+                          "Resource":  "*",
+                          "Action":  [
+                                         "elasticbeanstalk:CreateApplicationVersion",
+                                         "elasticbeanstalk:UpdateEnvironment",
+                                         "elasticbeanstalk:DescribeApplications",
+                                         "elasticbeanstalk:DescribeEnvironments",
+                                         "elasticbeanstalk:DescribeEnvironmentHealth",
+                                         "elasticbeanstalk:DescribeEnvironmentResources",
+                                         "elasticbeanstalk:DescribeEvents",
+                                         "elasticbeanstalk:DescribeApplicationVersions",
+                                         "elasticbeanstalk:DescribeConfigurationSettings",
+                                         "elasticbeanstalk:CreateStorageLocation"
+                                     ]
+                      },
+                      {
+                          "Effect":  "Allow",
+                          "Sid":  "ElasticBeanstalkDeploymentBucket",
+                          "Resource":  [
+                                           "arn:aws:s3:::elasticbeanstalk-us-east-1-299332719369",
+                                           "arn:aws:s3:::elasticbeanstalk-us-east-1-299332719369/*"
+                                       ],
+                          "Action":  [
+                                         "s3:GetObject",
+                                         "s3:GetObjectVersion",
+                                         "s3:PutObject",
+                                         "s3:CreateBucket",
+                                         "s3:ListBucket",
+                                         "s3:GetBucketLocation",
+                                         "s3:GetBucketAcl"
+                                     ]
+                      },
+                      {
+                          "Effect":  "Allow",
+                          "Sid":  "CloudFormationRead",
+                          "Resource":  "*",
+                          "Action":  [
+                                         "cloudformation:DescribeStacks",
+                                         "cloudformation:DescribeStackResources"
+                                     ]
+                      }
+                  ]
+}
