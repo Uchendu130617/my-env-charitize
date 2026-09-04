@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 permissions:
@@ -14,34 +15,113 @@ env:
   AWS_REGION: us-east-1
   EB_APPLICATION_NAME: charitize
   EB_ENVIRONMENT_NAME: my-env
-  AWS_ROLE_ARN: arn:aws:iam::299332719369:role/GitHubActions-Charitize-EB
+  EB_S3_BUCKET: elasticbeanstalk-us-east-1-299332719369
 
 jobs:
   deploy:
+    name: Deploy to Elastic Beanstalk
     runs-on: ubuntu-latest
 
     steps:
+
+      # --------------------------------------------------
+      # 1. Checkout source code
+      # --------------------------------------------------
       - name: Checkout source code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials with OIDC
-        uses: aws-actions/configure-aws-credentials@v6.2.3
+      # --------------------------------------------------
+      # 2. Configure AWS credentials using OIDC
+      # --------------------------------------------------
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          allowed-account-ids: 299332719369
 
+      # --------------------------------------------------
+      # 3. Verify AWS identity
+      # --------------------------------------------------
       - name: Verify AWS identity
-        run: aws sts get-caller-identity
+        run: |
+          aws sts get-caller-identity
 
-      - name: Deploy to Elastic Beanstalk
-        uses: aws-actions/aws-elasticbeanstalk-deploy@v1
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          application-name: ${{ env.EB_APPLICATION_NAME }}
-          environment-name: ${{ env.EB_ENVIRONMENT_NAME }}
-          create-application-if-not-exists: false
-          create-environment-if-not-exists: false
-          wait-for-deployment: true
-          wait-for-environment-recovery: true
-          deployment-timeout: 900
+      # --------------------------------------------------
+      # 4. Verify Elastic Beanstalk environment
+      # --------------------------------------------------
+      - name: Check Elastic Beanstalk environment
+        run: |
+          aws elasticbeanstalk describe-environments \
+            --application-name "$EB_APPLICATION_NAME" \
+            --environment-names "$EB_ENVIRONMENT_NAME" \
+            --region "$AWS_REGION"
+
+      # --------------------------------------------------
+      # 5. Create deployment package
+      # --------------------------------------------------
+      - name: Create deployment package
+        run: |
+          zip -r deploy.zip . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "deploy.zip"
+
+      # --------------------------------------------------
+      # 6. Upload deployment package to S3
+      # --------------------------------------------------
+      - name: Upload deployment package
+        run: |
+          VERSION_LABEL="${GITHUB_SHA}"
+          S3_KEY="charitize/${VERSION_LABEL}.zip"
+
+          echo "VERSION_LABEL=${VERSION_LABEL}" >> "$GITHUB_ENV"
+          echo "S3_KEY=${S3_KEY}" >> "$GITHUB_ENV"
+
+          aws s3 cp deploy.zip \
+            "s3://${EB_S3_BUCKET}/${S3_KEY}" \
+            --region "$AWS_REGION"
+
+      # --------------------------------------------------
+      # 7. Create Elastic Beanstalk application version
+      # --------------------------------------------------
+      - name: Create Elastic Beanstalk application version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APPLICATION_NAME" \
+            --version-label "$VERSION_LABEL" \
+            --description "GitHub Actions deployment ${GITHUB_SHA}" \
+            --source-bundle S3Bucket="$EB_S3_BUCKET",S3Key="$S3_KEY" \
+            --region "$AWS_REGION"
+
+      # --------------------------------------------------
+      # 8. Deploy application version
+      # --------------------------------------------------
+      - name: Deploy application version
+        run: |
+          aws elasticbeanstalk update-environment \
+            --application-name "$EB_APPLICATION_NAME" \
+            --environment-name "$EB_ENVIRONMENT_NAME" \
+            --version-label "$VERSION_LABEL" \
+            --region "$AWS_REGION"
+
+      # --------------------------------------------------
+      # 9. Wait for deployment
+      # --------------------------------------------------
+      - name: Wait for deployment
+        run: |
+          aws elasticbeanstalk wait environment-updated \
+            --application-name "$EB_APPLICATION_NAME" \
+            --environment-names "$EB_ENVIRONMENT_NAME" \
+            --region "$AWS_REGION"
+
+      # --------------------------------------------------
+      # 10. Verify final deployment
+      # --------------------------------------------------
+      - name: Verify deployment health
+        run: |
+          aws elasticbeanstalk describe-environments \
+            --application-name "$EB_APPLICATION_NAME" \
+            --environment-names "$EB_ENVIRONMENT_NAME" \
+            --region "$AWS_REGION" \
+            --query "Environments[0].{Status:Status,Health:Health,Version:VersionLabel,URL:CNAME}" \
+            --output table
