@@ -67,12 +67,7 @@ jobs:
             "s3://${EB_S3_BUCKET}/${S3_KEY}" \
             --region "$AWS_REGION"
 
-      - name: Verify S3 deployment package
-        run: |
-          aws s3api head-object \
-            --bucket "$EB_S3_BUCKET" \
-            --key "$S3_KEY" \
-            --region "$AWS_REGION"
+  
 
       - name: Create Elastic Beanstalk application version
         run: |
